@@ -109,7 +109,7 @@ fitControl <- trainControl(method="cv", number=10)
 
 1. Generalised Boosted Model (GBM). 
 
-```{r, cache=TRUE}
+```{r, cache=TRUE, message=FALSE}
 gbm.fit <- train(classe ~ . , data=trainingSet,
                  method="gbm", trControl=fitControl, verbose=FALSE)
 gbm.fit
@@ -204,3 +204,16 @@ Now using the test set, and our optimum Random Forest prediction model, we get t
 predict.rf.1.test <- predict(rf.fit1, testingDataSet)
 predict.rf.1.test[1:20]
 ```
+
+###Out of Sample Error
+
+THe out of sample error is calculated below, based on the optimal Random Forest model.
+
+```{r, message=FALSE, warning=FALSE}
+
+ose <- sum(predict.rf.1.test == validationSet$classe)/length(predict.rf.1.test)
+ose
+
+```
+
+The out of sample error rate is `r (1 - ose) * 100`%
