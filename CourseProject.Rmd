@@ -5,94 +5,92 @@ date: "February 20, 2016"
 output: html_document
 ---
 
-##Our mission - quoted directly from the project outline
+##Our mission
+
+#####Quoted directly from the project outline
 
 Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
 
 In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
 
 ###Data
-
-The training data for this project are available here:
-https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
-
-The test data are available here:
-https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
-
-The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
-
-###Required libraries
-
-The following libraries are assumed to be installed and the caret version is shown.
-
-```{r, message=FALSE}
-library("caret")
-library("data.table")
-packageVersion("caret")
-```
-
-###Download data
-
-First we use the fread from the "data.table" package to read the data. This library is very fast so I decided to use it for the data loading. This block is cached although in reality you might not want to cache this if the data is likely to change frequently.
-
-```{r, cache=TRUE}
-trainingDataSource <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
-testingDataSource <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```{r}
 trainingDataCsv <- "trainingData.csv"
 testingDataCsv <- "testing.csv"
+```
+
+```{r, echo=FALSE, cache=TRUE}
+trainingDataSource <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingDataSource <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 
 if (!file.exists(trainingDataCsv)){ download.file(trainingDataSource, destfile=trainingDataCsv) }
 if (!file.exists(testingDataCsv)){ download.file(testingDataSource, destfile=testingDataCsv) }
 
-trainingDataSet <- fread(trainingDataCsv, na.strings=c("", "NA"))
-testingDataSet <- fread(testingDataCsv, na.strings=c("", "NA"))
-dim(trainingDataSet)
 ```
 
-The data structure is large and analysing it would make the project exceed 5 pages, so for brevity this is not included. We will get rid of columns that have a large proportion of NA values and where we cannot infer any reasonable value. Some columns were date and time or indentification values, are have no relevance to any predictive model and were therefore removed.
+The training data set for this project is available here:  
+`r trainingDataSource`
 
-```{r}
+The test data set is available here:  
+`r testingDataSource`
+
+###Required libraries
+
+The following libraries are requiuired and assumed to be installed. Additionally the version of caret is shown.
+
+```{r, message=FALSE}
+library("caret")
+library("data.table")
+library("arm")
+packageVersion("caret")
+```
+
+###Download data and initial exploration
+
+First we use the "fread" function from the "data.table" package to read the data, using blank and "NA" as the NA strings. The data structure is both large and sparse. Analysing in detail would make the project excessively large in terms of the number of pages, so for brevity the specifics of this analysis are not included. We will get rid of columns that have a large proportion of "NA" values and where we cannot infer any reasonable value. The first seven columns were date/time or indentification values and in my opinion are not relevant to any predictive model and therefore were removed.
+
+```{r, cache=TRUE}
+trainingDataSet <- fread(trainingDataCsv, na.strings=c("", "NA"))
+testingDataSet <- fread(testingDataCsv, na.strings=c("", "NA"))
 nonSparseColumns <- colSums(is.na(trainingDataSet)) <= nrow(trainingDataSet) * 0.9
 irrelevantColumns <- c(1,2,3,4,5,6,7)
-
 #Convert to a data frame and then select the columns
 trainingDataSet <- data.frame(trainingDataSet)[ , nonSparseColumns]
-#Remove the first 5 columns, because this data is irrelevant (Name, Date/Time, row index)
+#Remove the first 7 columns, because this data is irrelevant (Name, Date/Time, row index, ...)
 trainingDataSet <- trainingDataSet[ , -irrelevantColumns]
-
 testingDataSet <- data.frame(testingDataSet)[ , nonSparseColumns]
 testingDataSet <- testingDataSet[ , -irrelevantColumns]
 ```
 
-Some attributes may have a low variance, which means that the attribute values will be nearly the same for all observations. This data can impact the model and should be removed if there are any. The caret package provides us with a useful utility to find thee columns.
+The number of columns removed because of sparse data is `r length(which(nonSparseColumns == TRUE))`. Some attributes may have a low variance, which means that the attribute values will be nearly the same for all observations. This data can impact the model and should be removed, if there are any low variance attributes. The caret package provides us with a useful utility to find any such attributes. There appear to be none but it is always worth checking so that we can simplify any model and not include correlated predictors.
 
 ```{r}
 lowVariance <- nearZeroVar(trainingDataSet, saveMetrics=T)
 lowVariance[lowVariance$nzv == TRUE,]
-
 trainingDataSet <- trainingDataSet[, !(lowVariance$nzv)]
 testingDataSet <- testingDataSet[, !(lowVariance$nzv)]
 ```
 
-We will also check for any predictors that are highly correlated. Remove the last column which is our response variable and the "cor" function only works with numeric and "classe" is not a predictor, it is our response variable. We will remove the highly correlated predictors with absolute correlations above 0.8 .
+We will also check for any predictors that are highly correlated so we will remove the highly correlated predictors, those with absolute correlations above 0.8 .
 
 ```{r}
 # classe is the last attribute, remove it for the correlation function
 colCount <- dim(trainingDataSet)[2]
 trainingCorr <- cor(trainingDataSet[, -colCount])
-
 highlyCorPred <- findCorrelation(trainingCorr, cutoff=0.8)
 trainingDataSet <- trainingDataSet[,-highlyCorPred]
 trainingDataSet <- trainingDataSet[,-highlyCorPred]
 ```
 
-Now that we have our columns, we must convert the response variable to a factor, i.e. a categorical variable.
+Now that we have our attributes with which we will try to find a model, we will convert the response variable to a factor, i.e. a categorical variable. Right now "classe" is a character string, based on how we loaded the data, which did not convert strings to factors.
 
 ```{r}
 trainingDataSet$classe <- as.factor(trainingDataSet$classe)
 ```
 
-We are now left with attributes that have values but we have a lot of attributes from which to try and find a model. Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable.
+###Partition the Data 
+
+Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable.
 
 ```{r}
 set.seed(8020)
@@ -101,85 +99,108 @@ trainingSet <- trainingDataSet[trainIndex,]
 validationSet <- trainingDataSet[-trainIndex,]
 ```
 
-We will use 5 fold cross-validation. The data size is reasonably large so 10 folds still gives a good sized training set for each fold. Repeating 5 times is for performance because 10 repeats took a long time.
+###Finding our Model
+
+We will use 10 fold cross-validation. The data size is reasonably large so 10 folds still gives a good sized training set for each fold. I considered using repeated cross validation but decided against it for performance reasons. I might later return to this and try repeated CV along with parallel processing.
 
 ```{r, cache=TRUE}
 fitControl <- trainControl(method="cv", number=10)
+```
+
+1. Generalised Boosted Model (GBM). 
+
+```{r, cache=TRUE}
 gbm.fit <- train(classe ~ . , data=trainingSet,
                  method="gbm", trControl=fitControl, verbose=FALSE)
 gbm.fit
 ```
 
-Now we try a random forest model.
+2. Random Forest model.
 
 ```{r, cache=TRUE, message=FALSE}
-rf.fit <- train(classe ~ . , data=trainingSet,
+rf.fit1 <- train(classe ~ . , data=trainingSet,
                  method="rf", trControl=fitControl, verbose=FALSE)
-rf.fit
+rf.fit1
 ```
 
-Random Forest gives the highest prediction accuracy. Let us see how both models do on the test data set, which is where we will see the error rate that is of most interest, on a new data set.
+Random Forest gives the highest prediction accuracy. Let us see how both models do on the validation data set, which is the data that we took for validating the model created using the training data.
 
 ```{r, cache=TRUE, message=FALSE}
 gbmPredict <- predict(gbm.fit, validationSet)
-rfPredict <- predict(rf.fit, validationSet)
+rfPredict1 <- predict(rf.fit1, validationSet)
 ```
 
-##Performance on the Test Data
-
-The GBM model gives an accuracy of .9898, or 98.98% on the test data, which is a very high accuracy rate.
+###Prediction performance using the Validation Data Set
 
 ```{r}
-confusionMatrix(gbmPredict, validationSet$classe)
+gbmPredict.cm <- confusionMatrix(gbmPredict, validationSet$classe)
+gbmPredictAccuracy <- round(gbmPredict.cm$overall["Accuracy"],4)
+rfPredict1.cm <- confusionMatrix(rfPredict1, validationSet$classe)
+rfPredictAccuracy <- round(rfPredict1.cm$overall["Accuracy"], 4)
 ```
 
-However it was not the best model. The Random Forest model achieved an accuracy of .9971, or 99.71% on the test data. The confusion matrix below shows that here were very few false classifications, and this might be the optimum model. 
+The GBM model gives an accuracy of `r gbmPredictAccuracy * 100 `% on the test data, which is a high accuracy rate. Random guessing would have a rate of 0.2, so our model performs considerably better.
+
+```{r}
+gbmPredict.cm
+```
+
+However it was not the best model. The Random Forest model achieved an accuracy of `r rfPredictAccuracy * 100 `% on the test data. The confusion matrix below shows that here were very few false classifications, and this is the better model. 
 
 ```{r, cache=TRUE, message=FALSE}
-confusionMatrix(rfPredict, validationSet$classe)
+rfPredict1.cm
 ```
 
-With a 95% confidence interval of classifying between 98 and 99.8% of the classes correctly, this is a very high rate. We do have a model that has optimally 17 predictors and we might be able to simplify this. Below we show the variable importance and by removing less important parameters we could have a more parsimonious model.
- 
-```{r}
-predictorImportance <- varImp(rf.fit)
-plot(predictorImportance)
+```{r, echo=FALSE}
+rfPredict.ciLower <- round(rfPredict1.cm$overall["AccuracyLower"],4)
+rfPredict.ciUpper <- round(rfPredict1.cm$overall["AccuracyUpper"],4)
 ```
+
+With a 95% confidence interval of classifying between `r rfPredict.ciLower * 100 ` and `r rfPredict.ciUpper * 100` of the classes correctly, this is a very high rate. 
 
 ###Can we simplify the model ?
 
-Now that we have the most important variables, we can simply the model. There are several predictors of zero or a very low important so to make the model more understandable we can remove the low importance variables and check the accuracy. I have selected the 20 most important parameters and we will nly choose the model based on these.
+We do have a model that has potentially many predictors and we might be able to simplify this model and keep a similar accuracy. Below we show the variable importance and by removing less important parameters maybe we could find a more parsimonious model.
+ 
+```{r, cache=TRUE, message=FALSE}
+importanceThreshold <- 20
+predictorImportance <- varImp(rf.fit1)
+plot(predictorImportance)
+varImportance <- predictorImportance[[1]]
+importantVariables <- rownames(varImportance)[order(rowSums(varImportance), decreasing=TRUE)][rowSums(varImportance) > importanceThreshold]
+simpleCount <- length(importantVariables)
+importantVariables <- c(importantVariables, "classe")
+```
+
+Now that we have the most important variables, we will generate a new model model. There are several predictors with a low important so to make the model more understandable we can remove the low importance variables and check the accuracy. I have selected the `r simpleCount` most important parameters, based on having a scaled importance of more than `r importanceThreshold` and we will run the Random Forest model generation using these variables.
 
 ```{r, cache=TRUE, message=FALSE}
-varImportance <- predictorImportance[[1]]
-importantVariables <- rownames(varImportance)[order(rowSums(varImportance), decreasing=TRUE)][1:20]
-importantVariables <- c(importantVariables, "classe")
-
 trainingSet2 <- trainingSet[, importantVariables]
 rf.fit2 <- train(classe ~ ., data=trainingSet2,
                  method="rf", trControl=fitControl, verbose=FALSE)
 rf.fit2
 ```
 
-Now we have a model that uses 11 predictors, which is a more parsimonious model. Let us see how well it predicts using the validation set.
+Let us see how well it predicts using the validation set.
 
-```{r}
-dim(validationSet[, importantVariables])
+```{r, message=FALSE}
 predict.rf.2 <- predict(rf.fit2, validationSet)
-confusionMatrix(predict.rf.2, validationSet$classe)
+predict.rf.2.cm <- confusionMatrix(predict.rf.2, validationSet$classe)
+predict.rf.2.cm
+
+```
+```{r, echo=FALSE}
+rf2.PredictAccuracy <- round(predict.rf.2.cm$overall["Accuracy"], 4)
+rf2.Predict.ciLower <- round(predict.rf.2.cm$overall["AccuracyLower"],4)
+rf2.Predict.ciUpper <- round(predict.rf.2.cm$overall["AccuracyUpper"],4)
 ```
 
-Now using the test set, and our last model, we get the predictions below for the first 20 elements of the test data.
+This gives us an accuracy value of `r rf2.PredictAccuracy`, and a 95% CI of ana ccuracy level of between `r rf2.Predict.ciLower` and `r rf2.Predict.ciUpper`. This slightly simpler model gives us a similar but a slighty lower accuracy rate when compared to the optimum model found earlier.
+
+###Using the test data to make predictions
+Now using the test set, and our optimum Random Forest prediction model, we get the predictions below for the first 20 elements of the test data, using the Random Forest model with the highest accuracy.
 
 ```{r}
-predict.rf.2.test <- predict(rf.fit2, testingDataSet)
-predict.rf.2.test[1:20]
-```
-
-### Appendix
-
-```{r}
-plot(gbm.fit)
-plot(rf.fit)
-plot(rf.fit2)
+predict.rf.1.test <- predict(rf.fit1, testingDataSet)
+predict.rf.1.test[1:20]
 ```
