@@ -216,4 +216,4 @@ ose
 
 ```
 
-The out of sample error rate is `r (1 - ose) * 100`%
+The out of sample error rate is `r (1 - ose/100) * 100`%.
