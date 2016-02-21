@@ -123,7 +123,7 @@ trainingDataSet &lt;- trainingDataSet[,-highlyCorPred]</code></pre>
 </div>
 <div id="partition-the-data" class="section level3">
 <h3>Partition the Data</h3>
-<p>Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable.</p>
+<p>Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable to get an equal proportion of “classe” values in each set.</p>
 <pre class="r"><code>set.seed(8020)
 trainIndex &lt;- createDataPartition(trainingDataSet$classe, p=0.6, list=FALSE, times=1)
 trainingSet &lt;- trainingDataSet[trainIndex,]
@@ -134,7 +134,7 @@ validationSet &lt;- trainingDataSet[-trainIndex,]</code></pre>
 <p>We will use 10 fold cross-validation. The data size is reasonably large so 10 folds still gives a good sized training set for each fold. I considered using repeated cross validation but decided against it for performance reasons. I might later return to this and try repeated CV along with parallel processing.</p>
 <pre class="r"><code>fitControl &lt;- trainControl(method=&quot;cv&quot;, number=10)</code></pre>
 <ol style="list-style-type: decimal">
-<li>Generalised Boosted Model (GBM).</li>
+<li>Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the “gbm” method to build our model.</li>
 </ol>
 <pre class="r"><code>gbm.fit &lt;- train(classe ~ . , data=trainingSet,
                  method=&quot;gbm&quot;, trControl=fitControl, verbose=FALSE)
@@ -178,7 +178,7 @@ gbm.fit</code></pre>
 ## The final values used for the model were n.trees = 150,
 ##  interaction.depth = 3, shrinkage = 0.1 and n.minobsinnode = 10.</code></pre>
 <ol start="2" style="list-style-type: decimal">
-<li>Random Forest model.</li>
+<li>Random Forest model. Again using the caret package, we give the method argument as “rf”, to se a Random Forest to build our model.</li>
 </ol>
 <pre class="r"><code>rf.fit1 &lt;- train(classe ~ . , data=trainingSet,
                  method=&quot;rf&quot;, trControl=fitControl, verbose=FALSE)
@@ -361,6 +361,7 @@ predict.rf.1.test[1:20]</code></pre>
 <div id="out-of-sample-error" class="section level3">
 <h3>Out of Sample Error</h3>
 <p>THe out of sample error is calculated below, based on the optimal Random Forest model.</p>
+<p>Out of sample accuracy is:</p>
 <pre class="r"><code>ose &lt;- sum(predict.rf.1.test == validationSet$classe)/length(predict.rf.1.test)
 ose</code></pre>
 <pre><code>## [1] 86.95</code></pre>

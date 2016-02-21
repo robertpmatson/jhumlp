@@ -90,7 +90,7 @@ trainingDataSet$classe <- as.factor(trainingDataSet$classe)
 
 ###Partition the Data 
 
-Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable.
+Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable to get an equal proportion of "classe" values in each set.
 
 ```{r}
 set.seed(8020)
@@ -107,7 +107,7 @@ We will use 10 fold cross-validation. The data size is reasonably large so 10 fo
 fitControl <- trainControl(method="cv", number=10)
 ```
 
-1. Generalised Boosted Model (GBM). 
+1. Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the "gbm" method to build our model.
 
 ```{r, cache=TRUE, message=FALSE}
 gbm.fit <- train(classe ~ . , data=trainingSet,
@@ -115,7 +115,7 @@ gbm.fit <- train(classe ~ . , data=trainingSet,
 gbm.fit
 ```
 
-2. Random Forest model.
+2. Random Forest model. Again using the caret package, we give the method argument as "rf", to se a Random Forest to build our model.
 
 ```{r, cache=TRUE, message=FALSE}
 rf.fit1 <- train(classe ~ . , data=trainingSet,
@@ -208,6 +208,8 @@ predict.rf.1.test[1:20]
 ###Out of Sample Error
 
 THe out of sample error is calculated below, based on the optimal Random Forest model.
+
+Out of sample accuracy is:
 
 ```{r, message=FALSE, warning=FALSE}
 
