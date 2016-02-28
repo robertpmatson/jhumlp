@@ -1,6 +1,6 @@
 ---
 title: "Practical Machine Learning - Course Project"
-author: "Robert Matson"
+author: "Robert"
 date: "February 28, 2016"
 output: html_document
 ---
@@ -60,11 +60,10 @@ trainingDataSet$classe <- as.factor(trainingDataSet$classe)
 
 The data is clean: variables are in a single column, with each observation in a single row. The data structure is both large and sparse. Analysing the data structure in detail would make the project excessively large in terms of the number of pages, so for brevity the specifics of this analysis are not included. 
 
-The Response variable "classe" has a distributionas shown below. Class A is the most frequent level and the remaining 4 levels appear to be within a close range meaning that the classes are relatively balanced. 
+The Response variable "classe" has a distribution as shown below. Class A is the most frequent level and the remaining 4 levels appear to be within a close range. There is a dominant level but in my opinion the dominance is not heavy and that overall the levels are reasonably balanced.
 
 ```{r, warning=FALSE, message=FALSE}
-plot(trainingDataSet$classe, col="darkgreen", main='Distribution of the Levels of the response variable classe', xlab="Factor level for classe", ylab="Frequency", type="h")
-rowCount <- nrow(trainingDataSet)
+plot(trainingDataSet$classe, col="darkgreen", main='Distribution of the Levels of the response variable (classe)', xlab="Factor level", ylab="Frequency")
 table(trainingDataSet$classe)
 naSumCutOff <- 0.9
 ```
@@ -124,11 +123,11 @@ validationSet <- trainingDataSet[-trainIndex,]
 
 We will use `r numberOfFolds` fold cross-validation which is repeated `r numberOfRepeats` times when training our model. We are using parallel processing provided by the "doMC" library to gain better performance when creating our model. 
 
-To train our model and to compare two different models, we will try with a boosted model and then we will use a Random Forest model. The are both models widely used for classification problems such as the prediction problem that we are trying to solve. 
-
 ```{r, cache=TRUE}
-fitControl <- trainControl(method="cv", number=10, repeats = numberOfRepeats)
+fitControl <- trainControl(method="cv", number=numberOfFolds, repeats=numberOfRepeats)
 ```
+
+To train our model and to compare two different models, we will try with a boosted model and then we will use a Random Forest model. They are both models widely used for classification problems such as the prediction problem that we are trying to solve. 
 
 1. Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the "gbm" method to build our model.
 
@@ -162,13 +161,13 @@ rfPredict1.cm <- confusionMatrix(rfPredict1, validationSet$classe)
 rfPredictAccuracy <- round(rfPredict1.cm$overall["Accuracy"], 4)
 ```
 
-The GBM model gives an accuracy of `r gbmPredictAccuracy * 100 `% on the test data, which is a high accuracy rate. Random guessing would have a rate of 0.2, so our model performs considerably better.
+The GBM model gives an accuracy of `r gbmPredictAccuracy * 100 `% with the validation data, which is a high accuracy rate. Random guessing would have a rate of 0.2, so our model performs considerably better.
 
 ```{r}
 gbmPredict.cm
 ```
 
-However it was not the best model. The Random Forest model achieved an accuracy of `r rfPredictAccuracy * 100 `% on the test data. The confusion matrix below shows that here were very few false classifications, and this is the better model. 
+However it was not the best model. The Random Forest model achieved an accuracy of `r rfPredictAccuracy * 100 `% with the validation data. The confusion matrix below shows that here were very few false classifications, and this is the better model. 
 
 ```{r, cache=TRUE, message=FALSE}
 rfPredict1.cm
@@ -218,25 +217,19 @@ rf2.Predict.ciLower <- round(predict.rf.2.cm$overall["AccuracyLower"],4)
 rf2.Predict.ciUpper <- round(predict.rf.2.cm$overall["AccuracyUpper"],4)
 ```
 
-This gives us an accuracy value of `r rf2.PredictAccuracy`, and a 95% CI of ana ccuracy level of between `r rf2.Predict.ciLower` and `r rf2.Predict.ciUpper`. This slightly simpler model gives us a similar but a slighty lower accuracy rate when compared to the optimum model found earlier.
+This gives us an accuracy value of `r rf2.PredictAccuracy`, and a 95% CI of an accuracy level of between `r rf2.Predict.ciLower` and `r rf2.Predict.ciUpper`. This model gives us a similar but a slighty lower accuracy rate when compared to the first Random Forest model.
 
 
 ###Out-of-Sample Error
 
-The out-of-sample error rate is the error rate of the model when using the model generated from the training data to predict the response variable in the validation data set. This is a value of 1 minus the accuracy
+The out-of-sample error rate is the error rate of the model when predicting the response variable using the validation data set and the value is defined as 1 minus the accuracy of the model. The first Random Forest model has an out-of-sample error rate as calculated below.
 
-The out of sample error is calculated below, based on the predictions generated by the Random Forest model using the validation data set that we created earlier.
+Expected out-of-sample error rate is: 1 - accuracy = 1 - `r rfPredictAccuracy ` = `r 1 - rfPredictAccuracy `, which converts as a percentage to `r (1 - rfPredictAccuracy) * 100`%. 
 
-Out of sample accuracy is:
-
-```{r, message=FALSE, warning=FALSE}
-rf2.PredictAccuracy
-```
-
-The expected out of sample error rate is 1 minus `r rf2.PredictAccuracy`, which converts as a percentage to `r (1 - rf2.PredictAccuracy) * 100`%. Based on this expected out-of-sample error rate we can expect approximately one of the 20 predictions in the quiz to be incorrect.
+Based on this expected out-of-sample error rate we can expect approximately one of the 20 predictions in the assignment quiz to be incorrect.
 
 ###Using the test data to make predictions
-Now using the test set, and our optimum Random Forest prediction model, we get the predictions below for the first 20 elements of the test data, using the Random Forest model with the highest accuracy.
+Using the test set with our first Random Forest prediction model, we get the predictions below for the first 20 elements of the test data.
 
 ```{r}
 predict.rf.1.test <- predict(rf.fit1, testingDataSet)
@@ -245,4 +238,4 @@ predict.rf.1.test[1:20]
 
 ### Conclusion
 
-Based on the two generated models, we have concluded that the Random Forst model will give a better prediction accuracy and a lower out-of-sample error rate.
+Based on the two generated models, we have concluded that the Random Forst model will give a better prediction accuracy and therefore a lower out-of-sample error rate.  
