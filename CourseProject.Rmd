@@ -1,11 +1,11 @@
 ---
 title: "Practical Machine Learning - Course Project"
 author: "Robert Matson"
-date: "February 20, 2016"
+date: "February 28, 2016"
 output: html_document
 ---
 
-##Our mission
+##Synopsis
 
 #####Quoted directly from the project outline
 
@@ -14,18 +14,16 @@ Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible t
 In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
 
 ###Data
+
+We have downloaded the data for the training and test data sets to our working directory. 
+
 ```{r}
 trainingDataCsv <- "trainingData.csv"
 testingDataCsv <- "testing.csv"
-```
-
-```{r, echo=FALSE, cache=TRUE}
 trainingDataSource <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 testingDataSource <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
-
 if (!file.exists(trainingDataCsv)){ download.file(trainingDataSource, destfile=trainingDataCsv) }
 if (!file.exists(testingDataCsv)){ download.file(testingDataSource, destfile=testingDataCsv) }
-
 ```
 
 The training data set for this project is available here:  
@@ -33,6 +31,8 @@ The training data set for this project is available here:
 
 The test data set is available here:  
 `r testingDataSource`
+
+Using this data we will use the training dta set to build a model which will be used to predict the "classe" label of the test data set. This is a predictione exercise and the type of prdediction is "Classification".
 
 ###Required libraries
 
@@ -42,18 +42,40 @@ The following libraries are requiuired and assumed to be installed. Additionally
 library("caret")
 library("data.table")
 library("arm")
+library("doMC")
+registerDoMC(cores = 5)
 packageVersion("caret")
 ```
 
 ###Download data and initial exploration
 
-First we use the "fread" function from the "data.table" package to read the data, using blank and "NA" as the NA strings. The data structure is both large and sparse. Analysing in detail would make the project excessively large in terms of the number of pages, so for brevity the specifics of this analysis are not included. We will get rid of columns that have a large proportion of "NA" values and where we cannot infer any reasonable value. The first seven columns were date/time or indentification values and in my opinion are not relevant to any predictive model and therefore were removed.
+First we use the "fread" function from the "data.table" package to read the data, defining blank strings and the value "NA" as the 'NA' strings. 
 
-```{r, cache=TRUE}
+```{r}
 trainingDataSet <- fread(trainingDataCsv, na.strings=c("", "NA"))
 testingDataSet <- fread(testingDataCsv, na.strings=c("", "NA"))
-nonSparseColumns <- colSums(is.na(trainingDataSet)) <= nrow(trainingDataSet) * 0.9
-irrelevantColumns <- c(1,2,3,4,5,6,7)
+# Convert classe to a Factor variable
+trainingDataSet$classe <- as.factor(trainingDataSet$classe)
+```
+
+The data is clean: variables are in a single column, with each observation in a single row. The data structure is both large and sparse. Analysing the data structure in detail would make the project excessively large in terms of the number of pages, so for brevity the specifics of this analysis are not included. 
+
+The Response variable "classe" has a distributionas shown below. Class A is the most frequent level and the remaining 4 levels appear to be within a close range meaning that the classes are relatively balanced. 
+
+```{r, warning=FALSE, message=FALSE}
+plot(trainingDataSet$classe, col="darkgreen", main='Distribution of the Levels of the response variable classe', xlab="Factor level for classe", ylab="Frequency", type="h")
+rowCount <- nrow(trainingDataSet)
+table(trainingDataSet$classe)
+naSumCutOff <- 0.9
+```
+
+We will get rid of columns that have a large proportion (over `r naSumCutOff * 100`%) of "NA" values and where we cannot infer any reasonable value. The first seven columns (user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window and num_window) are date/time or indentification values and in my opinion are not relevant to any predictive model and therefore are removed.
+
+```{r, cache=TRUE}
+nonSparseColumns <- colSums(is.na(trainingDataSet)) <= nrow(trainingDataSet) * naSumCutOff
+names <- names(trainingDataSet)
+names[1:7]
+irrelevantColumns <- c(1:7)
 #Convert to a data frame and then select the columns
 trainingDataSet <- data.frame(trainingDataSet)[ , nonSparseColumns]
 #Remove the first 7 columns, because this data is irrelevant (Name, Date/Time, row index, ...)
@@ -62,49 +84,50 @@ testingDataSet <- data.frame(testingDataSet)[ , nonSparseColumns]
 testingDataSet <- testingDataSet[ , -irrelevantColumns]
 ```
 
-The number of columns removed because of sparse data is `r length(which(nonSparseColumns == TRUE))`. Some attributes may have a low variance, which means that the attribute values will be nearly the same for all observations. This data can impact the model and should be removed, if there are any low variance attributes. The caret package provides us with a useful utility to find any such attributes. There appear to be none but it is always worth checking so that we can simplify any model and not include correlated predictors.
+The number of columns removed because of sparse data is `r length(which(nonSparseColumns == TRUE))`. Some attributes may have a low variance, which means that the attribute values will be nearly the same for all observations. Low variance data is not very useful for predictive models and should be removed. The caret package provides us with a useful utility to find any such attributes and from the data that has already been cleaned already there appear to be no low variance variables remaining.
 
 ```{r}
 lowVariance <- nearZeroVar(trainingDataSet, saveMetrics=T)
 lowVariance[lowVariance$nzv == TRUE,]
 trainingDataSet <- trainingDataSet[, !(lowVariance$nzv)]
 testingDataSet <- testingDataSet[, !(lowVariance$nzv)]
+corrCutoff <- 0.8
 ```
 
-We will also check for any predictors that are highly correlated so we will remove the highly correlated predictors, those with absolute correlations above 0.8 .
+We will also check for any predictors that are highly correlated so we will remove the highly correlated predictors, those with absolute correlations above `r corrCutoff ` . Variables that are highly correlated tend to change together so changing the value in one variable would usually mean a change in highly correlated variable.
 
 ```{r}
 # classe is the last attribute, remove it for the correlation function
 colCount <- dim(trainingDataSet)[2]
 trainingCorr <- cor(trainingDataSet[, -colCount])
-highlyCorPred <- findCorrelation(trainingCorr, cutoff=0.8)
+highlyCorPred <- findCorrelation(trainingCorr, cutoff=corrCutoff)
 trainingDataSet <- trainingDataSet[,-highlyCorPred]
 trainingDataSet <- trainingDataSet[,-highlyCorPred]
-```
 
-Now that we have our attributes with which we will try to find a model, we will convert the response variable to a factor, i.e. a categorical variable. Right now "classe" is a character string, based on how we loaded the data, which did not convert strings to factors.
-
-```{r}
-trainingDataSet$classe <- as.factor(trainingDataSet$classe)
+trainValidationSplit <- 0.75
+numberOfFolds <- 10
+numberOfRepeates <- 5
 ```
 
 ###Partition the Data 
 
-Now we will partition our data into a training and validation set. We will take 60% of our data for training the model and the remaining 40% for model validation. We will split over the response variable to get an equal proportion of "classe" values in each set.
+Now we will partition our data into a training and validation set. We will take `r trainValidationSplit * 100`% of our data for training the model and the remaining `r (1- trainValidationSplit) * 100`% for model validation. We will split over the response variable to get an equal proportion of "classe" values in each set.
 
 ```{r}
 set.seed(8020)
-trainIndex <- createDataPartition(trainingDataSet$classe, p=0.6, list=FALSE, times=1)
+trainIndex <- createDataPartition(trainingDataSet$classe, p=trainValidationSplit, list=FALSE, times=1)
 trainingSet <- trainingDataSet[trainIndex,]
 validationSet <- trainingDataSet[-trainIndex,]
 ```
 
 ###Finding our Model
 
-We will use 10 fold cross-validation. The data size is reasonably large so 10 folds still gives a good sized training set for each fold. I considered using repeated cross validation but decided against it for performance reasons. I might later return to this and try repeated CV along with parallel processing.
+We will use `r numberOfFolds` fold cross-validation which is repeated `r numberOfRepeates` times when training our model. We are using parallel processing provided by the "doMC" library to gain better performance when creating our model. 
+
+To train our model and to compare two different models, we will try with a boosted model and then we will use a Random Forest model. The are both models widely used for classification problems such as the prediction problem that we are trying to solve. 
 
 ```{r, cache=TRUE}
-fitControl <- trainControl(method="cv", number=10)
+fitControl <- trainControl(method="cv", number=10, repeats = 3)
 ```
 
 1. Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the "gbm" method to build our model.
@@ -197,6 +220,21 @@ rf2.Predict.ciUpper <- round(predict.rf.2.cm$overall["AccuracyUpper"],4)
 
 This gives us an accuracy value of `r rf2.PredictAccuracy`, and a 95% CI of ana ccuracy level of between `r rf2.Predict.ciLower` and `r rf2.Predict.ciUpper`. This slightly simpler model gives us a similar but a slighty lower accuracy rate when compared to the optimum model found earlier.
 
+
+###Out-of-Sample Error
+
+The out-of-sample error rate is the error rate of the model when using the model generated from the training data to predict the response variable in the validation data set. This is a value of 1 minus the accuracy
+
+The out of sample error is calculated below, based on the predictions generated by the Random Forest model using the validation data set that we created earlier.
+
+Out of sample accuracy is:
+
+```{r, message=FALSE, warning=FALSE}
+rf2.PredictAccuracy
+```
+
+The expected out of sample error rate is 1 minus `r rf2.PredictAccuracy`, which converts as a percentage to `r (1 - rf2.PredictAccuracy) * 100`%. Based on this expected out-of-sample error rate we can expect approximately one of the 20 predictions in the quiz to be incorrect.
+
 ###Using the test data to make predictions
 Now using the test set, and our optimum Random Forest prediction model, we get the predictions below for the first 20 elements of the test data, using the Random Forest model with the highest accuracy.
 
@@ -205,17 +243,6 @@ predict.rf.1.test <- predict(rf.fit1, testingDataSet)
 predict.rf.1.test[1:20]
 ```
 
-###Out of Sample Error
+### Conclusion
 
-THe out of sample error is calculated below, based on the optimal Random Forest model.
-
-Out of sample accuracy is:
-
-```{r, message=FALSE, warning=FALSE}
-
-ose <- sum(predict.rf.1.test == validationSet$classe)/length(predict.rf.1.test)
-ose
-
-```
-
-The out of sample error rate is `r (1 - ose/100) * 100`%.
+Based on the two generated models, we have concluded that the Random Forst model will give a better prediction accuracy and a lower out-of-sample error rate.
