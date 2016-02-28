@@ -106,7 +106,7 @@ trainingDataSet <- trainingDataSet[,-highlyCorPred]
 
 trainValidationSplit <- 0.75
 numberOfFolds <- 10
-numberOfRepeates <- 5
+numberOfRepeats <- 5
 ```
 
 ###Partition the Data 
@@ -122,12 +122,12 @@ validationSet <- trainingDataSet[-trainIndex,]
 
 ###Finding our Model
 
-We will use `r numberOfFolds` fold cross-validation which is repeated `r numberOfRepeates` times when training our model. We are using parallel processing provided by the "doMC" library to gain better performance when creating our model. 
+We will use `r numberOfFolds` fold cross-validation which is repeated `r numberOfRepeats` times when training our model. We are using parallel processing provided by the "doMC" library to gain better performance when creating our model. 
 
 To train our model and to compare two different models, we will try with a boosted model and then we will use a Random Forest model. The are both models widely used for classification problems such as the prediction problem that we are trying to solve. 
 
 ```{r, cache=TRUE}
-fitControl <- trainControl(method="cv", number=10, repeats = 3)
+fitControl <- trainControl(method="cv", number=10, repeats = numberOfRepeats)
 ```
 
 1. Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the "gbm" method to build our model.

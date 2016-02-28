@@ -148,7 +148,7 @@ trainingDataSet &lt;- trainingDataSet[,-highlyCorPred]
 
 trainValidationSplit &lt;- 0.75
 numberOfFolds &lt;- 10
-numberOfRepeates &lt;- 5</code></pre>
+numberOfRepeats &lt;- 5</code></pre>
 </div>
 <div id="partition-the-data" class="section level3">
 <h3>Partition the Data</h3>
@@ -162,7 +162,7 @@ validationSet &lt;- trainingDataSet[-trainIndex,]</code></pre>
 <h3>Finding our Model</h3>
 <p>We will use 10 fold cross-validation which is repeated 5 times when training our model. We are using parallel processing provided by the “doMC” library to gain better performance when creating our model.</p>
 <p>To train our model and to compare two different models, we will try with a boosted model and then we will use a Random Forest model. The are both models widely used for classification problems such as the prediction problem that we are trying to solve.</p>
-<pre class="r"><code>fitControl &lt;- trainControl(method=&quot;cv&quot;, number=10, repeats = 3)</code></pre>
+<pre class="r"><code>fitControl &lt;- trainControl(method=&quot;cv&quot;, number=10, repeats = numberOfRepeats)</code></pre>
 <ol style="list-style-type: decimal">
 <li>Generalised Boosted Model (GBM). We use the caret package to train the model, the method argument will use the “gbm” method to build our model.</li>
 </ol>
